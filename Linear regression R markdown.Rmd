@@ -1,0 +1,296 @@
+---
+title: "LINEAR REGRESSION IN R"
+author: "Becky Njuguna"
+date: "2024-01-22"
+output: html_document
+---
+# Determining the predictors of 6 minute walking distance using linear regression.
+Hard small. That is how a Kenyan would say something is "Ngumu kidogo", rounded off to the nearest English. 
+
+This, for me, was not a little hard. It was " a lottle" hard. Learning a new language in your 30's is what Kenyan society would call "Masomo ya gumbaru" Regardless,or should I say "irregardless", I persevered. 
+
+In 2023, I decided to start my data analytics journey. I chose to start by learning R as it is free, there are a lot of resources online and the R community is also very large. 
+In the project below, I used a data set provided while doing an online R course on Coursera, "Linear Regression in R for Public Health" by Imperial College London. 
+
+
+
+## Data Summary
+
+```{r}
+#Loading data set into R Studio
+COPD <- read.csv("COPD_student_dataset.csv")
+head (COPD)
+```
+
+
+The data set above has 101 entries. 
+
+*X- Ordered entry numbers  
+*ID- unique identifiers  
+*Age- age in years  
+*PackHistory-smoking history in pack years  
+*COPDSEVERITY- Severity of COPD MILD, -1, MODERATE-2, SEVERE-3, VERY SEVERE -4    
+*MWT1-First measure of distance walked in 6 minutes in metres  
+*MWT2- Second measure of Distance walked in 6 minutes in metres  
+*MWT1Best- Best walking distance in 6 minutes in metres  
+*FEV1- Forced expiratory volume in one minute in metres  
+*FEV1PRED- Predicted forced expiratoty volume in 1 minute in litres  
+*FVC-Forced Vital Capacity in litres  
+*FVCPRED - Predicted Forced Vital Capacity in litres  
+*CAT- COPD Assesement Score  
+*HAD- Hospital Anxiety and depression Score  
+*SGRQ- St. George's Respiratory Questionnaire score.  
+*AGEquartiles-Age Quartiles, 1-4  
+*copd severity, 1-4
+*smoking:no-0, yes-1  
+*Diabetes:no-0, yes-1  
+*muscular: no-0, yes-1  
+*hypertension :no-0, yes-1  
+*AtrialFib : no-0, yes-1  
+*IHD: no-0, yes-1  
+
+
+## Good Practise  
+## Next, we need to inspect for missing and outlier values. Fist, I downloaded the Hmsic that allows me to do this.   
+ 
+```{r}
+#Installing the Hmsic package
+install.packages("Hmisc", repos = "http://cran.r-project.org")
+library(Hmisc)
+#Description of individual variables
+describe(COPD)
+```
+
+# This shows that only the response variabe has missing data. Furthermore, only 1 entry is missing.
+# R's default is to exclude the missing data. 
+
+# Next, I checked for the distributions of the continuous variables. 
+```{r}
+#Checking if any of the continuous predictor variables have narrow distributions
+#Histogram to view the distribution of the variable, walking distance
+hist(COPD$MWT1Best, main="Histogram of Distance walked in 6 minutes (MWT1Best)", xlab="MWT1Best", breaks=12) 
+#Histogram to view distribution of variable, FEV1
+hist(COPD$FEV1, main="Histogram of lung function (FEV1)", xlab="FEV1") 
+#Histrogram to view the distribution of the variable FEV1PRED
+hist(COPD$FEV1PRED, main="Histogram of lung function (FEV1PRED)", xlab="FEV1PRED") 
+#Histrogram to view the distribution of the variable FVC
+hist(COPD$FVC, main="Histogram of lung function (FVC)", xlab="FVC")
+#Histrogram to view the distribution of the variable FVCPRED
+hist(COPD$FVCPRED, main="Histogram of lung function (FVCPRED)", xlab="FVCPRED")
+#Histrogram to view the distribution of the variable age
+hist(COPD$AGE, main="Histogram of AGE", xlab="AGE")
+#Histrogram to view the distribution of the variable packhistory
+hist(COPD$PackHistory, main="Histogram of PackHistory", xlab="PackHistory")
+```
+
+#Examining the categorical variable to completeness
+
+#Fist, I will create a new variable indicating the presence of at least one comorbidity (1) or complete absence (0)
+```{r}
+#First, all variables must be saved as factors
+COPD$Diabetes <- as.factor(COPD$Diabetes)
+class(COPD$Diabetes)
+COPD$muscular <- as.factor(COPD$muscular)
+class(COPD$muscular)
+COPD$hypertension <- as.factor(COPD$hypertension)
+class(COPD$hypertension)
+COPD$AtrialFib <- as.factor(COPD$AtrialFib)
+class(COPD$AtrialFib)
+COPD$IHD <- as.factor(COPD$IHD)
+class(COPD$IHD)
+```
+
+#Creating a new variable, comorbids
+```{r}
+#First make sure is same length as all other variables
+comorbids <- length(COPD$X)
+#Making it so that if with any comorbids, 1, if without, 0. 
+comorbids [COPD$Diabetes==1| COPD$muscular==1| COPD$hypertension==1| COPD$AtrialFib==1| COPD$IHD== 1] <- 1
+comorbids [is.na(comorbids)] <-0
+comorbids <- factor(comorbids)
+#Display Comorbids
+print(comorbids)
+#Summary of comorbids
+summary(comorbids)
+#Adding new comorbids variable into the data sets
+COPD$comorbids <- comorbids
+table(COPD$comorbids)
+```
+
+#This shows that there are 46 people with no comorbidities and 55 with at least one comorbidity. 
+
+
+
+
+
+
+
+##Examine the relationship between your candidate continuous predictor variables**
+```{r}
+#Creating a correlation matrix for continuous variables. 
+mylrmatrix<- COPD[, c("MWT1Best", "AGE" , "PackHistory", "FEV1", "FEV1PRED", "FVC", "FVCPRED")]
+#Use pairwise complete observations, ignoring rows with missing values for the calculation
+cor_matrix <- cor(mylrmatrix, use = "pairwise.complete.obs")
+cor_matrix
+#Correlation matrix to 2 decimal places
+round(cor_matrix, 2)
+#Correlation matrix plots
+pairs(~AGE+PackHistory+ FEV1+ FEV1PRED+ FVC+ FVCPRED, data= COPD )
+```
+
+#Above shows that the lung functions are highly correlated with one another. 
+#Therefore, FVCPRED is the best one to use given that the results of the pairwise corelation matrix are >-0.7 but < 0.7 
+
+#Install the gmodels package (if not installed)
+install.packages("gmodels")
+# Load the gmodels package
+library(gmodels)
+#Crosstable for cartegorical variable
+CrossTable (COPD$comorbids)
+
+
+#Next, I ran linear regression model for each predictor against the dependent variable
+```{r}
+#Running a linear regression model for age and distance walked. 
+MWT1Best_AGE <- lm(MWT1Best~AGE, data = COPD)
+#Printing the model objects
+lm(formula = MWT1Best~AGE, data = COPD )
+#Summary of model
+summary(MWT1Best_AGE)
+#To view 95% confidence interval
+confint(MWT1Best_AGE)
+#Checking model assumptions
+predictedvals <- predict(MWT1Best_AGE)
+residualvals <- residuals(MWT1Best_AGE)
+par(mfrow=c(2,2))
+hist(residualvals, main = "Histogram of residuals", xlab = "Residuals")
+
+```
+
+```{r}
+#Running a linear regression model for pack history and distance walked. 
+MWT1Best_PackHistory <- lm(MWT1Best~PackHistory, data = COPD)
+#Printing the model objects
+lm(formula = MWT1Best~PackHistory, data = COPD )
+#Summary of model
+summary(MWT1Best_PackHistory)
+#To view 95% confidence interval
+confint(MWT1Best_PackHistory)
+#Checking model assumptions
+predictedvals <- predict(MWT1Best_PackHistory)
+residualvals <- residuals(MWT1Best_PackHistory)
+par(mfrow=c(2,2))
+hist(residualvals, main = "Histogram of residuals", xlab = "Residuals")
+```
+
+
+
+```{r}
+#Running a linear regression model for FVCPRED and distance walked. 
+MWT1Best_FVCPRED <- lm(MWT1Best~FVCPRED, data = COPD)
+#Printing the model objects
+lm(formula = MWT1Best~FVCPRED, data = COPD )
+#Summary of model
+summary(MWT1Best_FVCPRED)
+#To view 95% confidence interval
+confint(MWT1Best_FVCPRED)
+#Checking model assumptions
+predictedvals <- predict(MWT1Best_FVCPRED)
+residualvals <- residuals(MWT1Best_FVCPRED)
+par(mfrow=c(2,2))
+hist(residualvals, main = "Histogram of residuals", xlab = "Residuals")
+```
+
+
+
+```{r}
+#Running a linear regression model for comorbids and distance walked. 
+MWT1Best_comorbids <- lm(MWT1Best~comorbids, data = COPD)
+#Printing the model objects
+lm(formula = MWT1Best~comorbids, data = COPD )
+#Summary of model
+summary(MWT1Best_comorbids)
+#To view 95% confidence interval
+confint(MWT1Best_comorbids)
+#Checking model assumptions
+predictedvals <- predict(MWT1Best_comorbids)
+residualvals <- residuals(MWT1Best_comorbids)
+par(mfrow=c(2,2))
+hist(residualvals, main = "Histogram of residuals", xlab = "Residuals")
+```
+
+```{r}
+#Running a linear regression model for comorbids and distance walked. 
+MWT1Best_comorbids <- lm(MWT1Best~comorbids, data = COPD)
+#Printing the model objects
+lm(formula = MWT1Best~comorbids, data = COPD )
+#Summary of model
+summary(MWT1Best_comorbids)
+#To view 95% confidence interval
+confint(MWT1Best_comorbids)
+#Checking model assumptions
+predictedvals <- predict(MWT1Best_comorbids)
+residualvals <- residuals(MWT1Best_comorbids)
+par(mfrow=c(2,2))
+hist(residualvals, main = "Histogram of residuals", xlab = "Residuals")
+```
+
+
+** 3. Fit a simple linear regression model between outcome and each predictor **
+```{r}
+#LM between walking distance and gender
+lr1AGE <- lm(MWT1Best~AGE, data= COPD)
+summary(lr1AGE)
+confint(lr1AGE)
+#LM between walking distance and FEV1
+lr2FEV1 <- lm(MWT1Best~FEV1, data= COPD)
+summary(lr2FEV1)
+confint(lr2FEV1)  
+#LM between walking distance and FVC
+lr3FVC <- lm(MWT1Best~FVC, data= COPD)
+summary(lr3FVC)
+confint(lr3FVC)    
+#LM between walking distance and FEV1PRED
+lr4FEV1PRED <- lm(MWT1Best~FEV1PRED, data= COPD)
+summary(lr4FEV1PRED)
+confint(lr4FEV1PRED)    
+#LM between walking distance and FVCPRED
+lr5FVCPRED <- lm(MWT1Best~FVCPRED, data= COPD)
+summary(lr5FVCPRED)
+confint(lr5FVCPRED) 
+#LM between walking distance and presence of comorbidities
+lr6comorbids <- lm(MWT1Best~comorbids, data = COPD)
+summary(lr6comorbids)
+confint(lr6comorbids) 
+#LM between walking distance and packhistory
+lr7PackHistory <- lm(MWT1Best~PackHistory, data = COPD)
+summary(lr7PackHistory)
+confint(lr7PackHistory) 
+
+```
+
+#Therefore pick FEV1 in the model over other lung function scored because the largest adjusted r in fev1 models explains fev to be the cause of most of the variance
+
+```{r}
+#Fitting the linear regression model for walking distance
+multiplelmMWT1Best <- lm(MWT1Best~FEV1+ AGE + PackHistory+ factor(comorbids), data= COPD)
+summary(multiplelmMWT1Best)
+confint(multiplelmMWT1Best)
+```
+
+#Lack of change in the coefficients between the simple model and the multiple model should reassure you that collinearity is unlikely to be a problem in the model. 
+#To examine the Variance inflation factors. 
+```{r}
+#Install car package for vif calculation
+install.packages("car", repos = "http://cran.r-project.org")
+
+library(car)
+#Calculatimg the VIFs for the model
+vif_values <- vif(multiplelmMWT1Best)
+vif_values
+```
+
+#None of the VIFs is greater than 5 and therefore collinearity is not of concern.
+```{r}
+
+```
